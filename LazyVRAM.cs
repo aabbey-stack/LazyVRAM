@@ -1,9 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using UnityEngine;
 using UnityEditor;
+using UnityEngine;
 using VRC.SDK3.Avatars.Components;
 
 // ReSharper disable once CheckNamespace
@@ -11,7 +9,7 @@ public class LazyVRAM : EditorWindow
 {
     private GameObject _avatarGameObject;
 
-    private readonly string[] _options = { "Standard", "High", "Low" };
+    private readonly string[] _options = { "Standard",  "Standard+", "High", "Low" };
     private int _selected;
     private int _selectedMainSize;
     private int _selectedOtherSize;
@@ -20,6 +18,43 @@ public class LazyVRAM : EditorWindow
     private bool _useCustomSizes;
     private int _mainTexturesSize = 2048;
     private int _otherTexturesSize = 1024;
+
+    private bool _highQualityCompression;
+
+    private string[] _fallbackShader =
+    {
+        "_MainTex",
+        "_MetallicGlossMap",
+        "_SpecGlossMap",
+        "_BumpMap",
+        "_ParallaxMap",
+        "_OcclusionMap",
+        "_EmissionMap",
+        "_DetailMask",
+        "_DetailAlbedoMap",
+        "_DetailNormalMap",
+        "_Color",
+        "_EmissionColor",
+        "_SpecColor",
+        "_Cutoff",
+        "_Glossiness",
+        "_GlossMapScale",
+        "_SpecularHighlights",
+        "_GlossyReflections",
+        "_SmoothnessTextureChannel",
+        "_Metallic",
+        "_SpecularHighlights",
+        "_GlossyReflections",
+        "_BumpScale",
+        "_Parallax",
+        "_OcclusionStrength",
+        "_DetailNormalMapScale",
+        "_UVSec",
+        "_Mode",
+        "_SrcBlend",
+        "_DstBlend",
+        "_ZWrite"
+    };
 
     // ReSharper disable once ArrangeObjectCreationWhenTypeEvident
     private Material[] _avatarMaterials;
@@ -43,6 +78,9 @@ public class LazyVRAM : EditorWindow
         EditorGUILayout.LabelField("<b>Standard</b>: sets main texture sizes to 2048, everything else to 1024", style);
         MakeSpace();
 
+        EditorGUILayout.LabelField("<b>Standard+</b>: sets main texture sizes to 2048, everything else to 512", style);
+        MakeSpace();
+
         EditorGUILayout.LabelField("<b>High</b>: sets main textures size to 1024, everything else to 512", style);
         MakeSpace();
 
@@ -57,6 +95,8 @@ public class LazyVRAM : EditorWindow
             EditorGUILayout.IntField("Main textures size:", _mainTexturesSize);
             EditorGUILayout.IntField("Other textures size:", _otherTexturesSize);
         }
+
+        _highQualityCompression = EditorGUILayout.Toggle("High Quality Compression", _highQualityCompression);
 
         _selected = EditorGUILayout.Popup("Optimization preset:", _selected, _options);
 
@@ -80,6 +120,8 @@ public class LazyVRAM : EditorWindow
                 Debug.LogError("You have entered an invalid custom size");
                 return;
             }
+
+            ChangeSize(_mainTexturesSize, _otherTexturesSize);
         }
         else
         {
@@ -90,17 +132,27 @@ public class LazyVRAM : EditorWindow
                     ChangeSize(2048, 1024);
                     break;
 
-                // high
                 case 1:
+                    ChangeSize(2048, 512);
+                    break;
+
+                // high
+                case 2:
                     ChangeSize(1024, 512);
                     break;
 
                 //low
-                case 2:
-                    ChangeSize(2048, 1024);
+                case 3:
                     break;
 
             }
+        }
+
+        foreach (var material in _avatarMaterials)
+        {
+            var selectedTexture = (Texture2D)material.GetTexture(_fallbackShader[0]);
+            selectedTexture.Resize(_selectedMainSize, _selectedMainSize,
+                _highQualityCompression ? TextureFormat.BC7 : TextureFormat.DXT5Crunched, true);
         }
     }
 
@@ -132,26 +184,23 @@ public class LazyVRAM : EditorWindow
     //https://stackoverflow.com/q/66368079
     private void GetMaterials()
     {
-        var skinnedMeshRenders = _avatarGameObject.GetComponentsInChildren<SkinnedMeshRenderer>();
+        var skinnedMeshRenderers = _avatarGameObject.GetComponentsInChildren<SkinnedMeshRenderer>();
 
-        if (skinnedMeshRenders == null)
+        if (skinnedMeshRenderers == null)
         {
             Debug.LogError("Failed to get skinned mesh renders of an Avatar");
             return;
         }
 
-        _avatarMaterials = new Material[skinnedMeshRenders.Length];
+        var initialMaterials = new Material[skinnedMeshRenderers.Length];
 
-        for (var i = 0; i < skinnedMeshRenders.Length; i++)
+        for (var i = 0; i < skinnedMeshRenderers.Length; i++)
         {
-            _avatarMaterials[i] = skinnedMeshRenders[i].sharedMaterial;
+            initialMaterials[i] = skinnedMeshRenderers[i].sharedMaterial;
         }
 
-        foreach (var material in _avatarMaterials)
-        {
-            Debug.Log(material.name);
-            Debug.Log($"Main Texture: {material.GetTexture("_MainTex").name}");
-        }
+        // removes the duplicates
+        _avatarMaterials = initialMaterials.Distinct().ToArray();
     }
 
     private bool ValidateSizes()
