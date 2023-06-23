@@ -32,7 +32,7 @@ public class LazyVRAM : EditorWindow
         "_EmissionMap",
         "_DetailMask",
         "_DetailAlbedoMap",
-        "_DetailNormalMap",
+        "_DetailNormalMap", 
         "_Color",
         "_EmissionColor",
         "_SpecColor",
@@ -97,8 +97,16 @@ public class LazyVRAM : EditorWindow
         }
 
         _highQualityCompression = EditorGUILayout.Toggle("High Quality Compression", _highQualityCompression);
+        if(_highQualityCompression){
+            EditorGUILayout.LabelField("<b>WARNING</b>: changing quality of compression requires hitting apply button", style);
+        }
 
         _selected = EditorGUILayout.Popup("Optimization preset:", _selected, _options);
+
+        if (GUILayout.Button("Test Revert"))
+        {
+            OptimizeTextures(4, _useCustomSizes);
+        }
 
         if (!GUILayout.Button("Lazy Optimize")) return;
 
@@ -145,14 +153,37 @@ public class LazyVRAM : EditorWindow
                 case 3:
                     break;
 
+                case 4:
+                    // used for testing
+                    ChangeSize(4096, 4096);
+                    break;
             }
         }
 
         foreach (var material in _avatarMaterials)
         {
-            var selectedTexture = (Texture2D)material.GetTexture(_fallbackShader[0]);
-            selectedTexture.Resize(_selectedMainSize, _selectedMainSize,
-                _highQualityCompression ? TextureFormat.BC7 : TextureFormat.DXT5Crunched, true);
+            OptimizeTextures(material, "_MainTex");
+            OptimizeTextures(material, "_DetailNormalMap");
+        }
+    }
+
+    private void OptimizeTextures(Material material, string fallbackShaderName)
+    {
+        // thanks scruffyruffles
+        var selectedTexture = (Texture2D)material.GetTexture(_fallbackShader[0]);
+        if (selectedTexture == null) return;
+        var textureImporter = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(selectedTexture)) as TextureImporter;
+        textureImporter.maxTextureSize = _selectedMainSize;
+        textureImporter.textureCompression = _highQualityCompression ? TextureImporterCompression.CompressedHQ : TextureImporterCompression.Compressed;
+        var textureNames = material.GetTexturePropertyNames();
+        foreach (var textureName in textureNames)
+        {
+            var tex = material.GetTexture(textureName);
+            if (tex == null) return;
+            if (tex.GetType() != typeof(Texture2D)) return;
+            textureImporter = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(tex)) as TextureImporter;
+            textureImporter.maxTextureSize = _selectedMainSize;
+            textureImporter.textureCompression = _highQualityCompression ? TextureImporterCompression.CompressedHQ : TextureImporterCompression.Compressed;
         }
     }
 
