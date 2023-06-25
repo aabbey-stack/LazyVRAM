@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -23,37 +24,13 @@ public class LazyVRAM : EditorWindow
 
     private string[] _fallbackShader =
     {
-        "_MainTex",
         "_MetallicGlossMap",
-        "_SpecGlossMap",
         "_BumpMap",
         "_ParallaxMap",
         "_OcclusionMap",
         "_EmissionMap",
         "_DetailMask",
         "_DetailAlbedoMap",
-        "_DetailNormalMap", 
-        "_Color",
-        "_EmissionColor",
-        "_SpecColor",
-        "_Cutoff",
-        "_Glossiness",
-        "_GlossMapScale",
-        "_SpecularHighlights",
-        "_GlossyReflections",
-        "_SmoothnessTextureChannel",
-        "_Metallic",
-        "_SpecularHighlights",
-        "_GlossyReflections",
-        "_BumpScale",
-        "_Parallax",
-        "_OcclusionStrength",
-        "_DetailNormalMapScale",
-        "_UVSec",
-        "_Mode",
-        "_SrcBlend",
-        "_DstBlend",
-        "_ZWrite"
     };
 
     // ReSharper disable once ArrangeObjectCreationWhenTypeEvident
@@ -162,18 +139,22 @@ public class LazyVRAM : EditorWindow
 
         foreach (var material in _avatarMaterials)
         {
-            OptimizeTextures(material, "_MainTex");
-            OptimizeTextures(material, "_DetailNormalMap");
+            foreach (var fallbackShader in _fallbackShader)
+            {
+                OptimizeTextures(material, fallbackShader, false);
+            }
+            OptimizeTextures(material, "_MainTex", true);
+            OptimizeTextures(material, "_DetailNormalMap", true);
         }
     }
 
-    private void OptimizeTextures(Material material, string fallbackShaderName)
+    private void OptimizeTextures(Material material, string fallbackShaderName, bool isMain)
     {
         // thanks scruffyruffles
-        var selectedTexture = (Texture2D)material.GetTexture(_fallbackShader[0]);
+        var selectedTexture = (Texture2D)material.GetTexture(fallbackShaderName);
         if (selectedTexture == null) return;
         var textureImporter = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(selectedTexture)) as TextureImporter;
-        textureImporter.maxTextureSize = _selectedMainSize;
+        textureImporter.maxTextureSize = isMain ? _selectedMainSize : _selectedOtherSize;
         textureImporter.textureCompression = _highQualityCompression ? TextureImporterCompression.CompressedHQ : TextureImporterCompression.Compressed;
         var textureNames = material.GetTexturePropertyNames();
         foreach (var textureName in textureNames)
@@ -182,7 +163,7 @@ public class LazyVRAM : EditorWindow
             if (tex == null) return;
             if (tex.GetType() != typeof(Texture2D)) return;
             textureImporter = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(tex)) as TextureImporter;
-            textureImporter.maxTextureSize = _selectedMainSize;
+            textureImporter.maxTextureSize = isMain ? _selectedMainSize : _selectedOtherSize;
             textureImporter.textureCompression = _highQualityCompression ? TextureImporterCompression.CompressedHQ : TextureImporterCompression.Compressed;
         }
     }
